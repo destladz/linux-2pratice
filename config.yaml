@@ -1,0 +1,7 @@
+package: "A"
+repository: "https://repo.maven.apache.org/maven2"
+test_mode: true
+test_file: "tests/repository.json"
+max_depth: 3
+ascii_tree: true
+plantuml_file: "dependency_graph.puml"

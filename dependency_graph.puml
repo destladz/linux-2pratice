@@ -1,0 +1,9 @@
+@startuml
+left to right direction
+"A" --> "B"
+"A" --> "C"
+"B" --> "D"
+"D" --> "A"
+"C" --> "D"
+"C" --> "E"
+@enduml
