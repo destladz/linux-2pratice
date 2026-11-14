@@ -1,9 +1,7 @@
 @startuml
 left to right direction
+skinparam packageStyle rectangle
 "A" --> "B"
-"A" --> "C"
-"B" --> "D"
-"D" --> "A"
+"B" --> "C"
 "C" --> "D"
-"C" --> "E"
 @enduml
