@@ -1,5 +1,6 @@
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -78,7 +79,7 @@ def load_test_repository(filename):
 
 
 def validate_max_depth(max_depth):
-    """Проверяет допустимость максимальной глубины."""
+    """Проверяет допустимую максимальную глубину."""
     if isinstance(max_depth, bool) or not isinstance(max_depth, int):
         raise ValueError("max_depth должен быть целым числом")
 
@@ -86,93 +87,73 @@ def validate_max_depth(max_depth):
         raise ValueError("max_depth не может быть отрицательным")
 
 
+@dataclass
+class TraversalContext:
+    """Хранит общее состояние обхода графа."""
 
-def visit_dependencies(
-    package,
-    depth,
-    dependencies,
-    graph,
-    best_depth,
-    active,
-    get_dependencies,
-    max_depth,
-):
+    graph: dict
+    best_depth: dict
+    active: set
+    get_dependencies: object
+    max_depth: int
+
+
+def visit_dependencies(package, depth, dependencies, context):
     """Обрабатывает зависимости текущего пакета."""
     for dependency in dependencies:
-        if dependency not in graph[package]:
-            graph[package].append(dependency)
+        if dependency not in context.graph[package]:
+            context.graph[package].append(dependency)
 
-        graph.setdefault(dependency, [])
+        context.graph.setdefault(dependency, [])
 
         visit_dependency(
             dependency,
             depth + 1,
-            graph,
-            best_depth,
-            active,
-            get_dependencies,
-            max_depth,
+            context,
         )
 
 
-def visit_dependency(
-    package,
-    depth,
-    graph,
-    best_depth,
-    active,
-    get_dependencies,
-    max_depth,
-):
+def visit_dependency(package, depth, context):
     """Рекурсивно обрабатывает один пакет."""
-    if package in active:
+    if package in context.active:
         return
 
-    previous_depth = best_depth.get(package)
+    previous_depth = context.best_depth.get(package)
     if previous_depth is not None and previous_depth <= depth:
         return
 
-    best_depth[package] = depth
-    graph.setdefault(package, [])
-    active.add(package)
+    context.best_depth[package] = depth
+    context.graph.setdefault(package, [])
+    context.active.add(package)
 
     try:
-        if depth < max_depth:
-            dependencies = get_dependencies(package)
+        if depth < context.max_depth:
+            dependencies = context.get_dependencies(package)
             visit_dependencies(
                 package,
                 depth,
                 dependencies,
-                graph,
-                best_depth,
-                active,
-                get_dependencies,
-                max_depth,
+                context,
             )
     finally:
-        active.remove(package)
-
+        context.active.remove(package)
 
 
 def build_graph(root, get_dependencies, max_depth):
     """Строит граф зависимостей с помощью рекурсивного DFS."""
     validate_max_depth(max_depth)
 
-    graph = {}
-    best_depth = {}
-    active = set()
-
-    visit_dependency(
-        root,
-        MIN_DEPTH,
-        graph,
-        best_depth,
-        active,
-        get_dependencies,
-        max_depth,
+    context = TraversalContext(
+        graph={},
+        best_depth={},
+        active=set(),
+        get_dependencies=get_dependencies,
+        max_depth=max_depth,
     )
 
-    return graph
+    visit_dependency(root, MIN_DEPTH, context)
+
+    return context.graph
 
 
 def dfs_order(package, graph, visited, active, result):
