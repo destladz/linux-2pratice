@@ -86,6 +86,35 @@ def validate_max_depth(max_depth):
         raise ValueError("max_depth не может быть отрицательным")
 
 
+
+def visit_dependencies(
+    package,
+    depth,
+    dependencies,
+    graph,
+    best_depth,
+    active,
+    get_dependencies,
+    max_depth,
+):
+    """Обрабатывает зависимости текущего пакета."""
+    for dependency in dependencies:
+        if dependency not in graph[package]:
+            graph[package].append(dependency)
+
+        graph.setdefault(dependency, [])
+
+        visit_dependency(
+            dependency,
+            depth + 1,
+            graph,
+            best_depth,
+            active,
+            get_dependencies,
+            max_depth,
+        )
+
+
 def visit_dependency(
     package,
     depth,
@@ -100,7 +129,6 @@ def visit_dependency(
         return
 
     previous_depth = best_depth.get(package)
-
     if previous_depth is not None and previous_depth <= depth:
         return
 
@@ -109,20 +137,12 @@ def visit_dependency(
     active.add(package)
 
     try:
-        if depth >= max_depth:
-            return
-
-        dependencies = get_dependencies(package)
-
-        for dependency in dependencies:
-            if dependency not in graph[package]:
-                graph[package].append(dependency)
-
-            graph.setdefault(dependency, [])
-
-            visit_dependency(
-                dependency,
-                depth + 1,
+        if depth < max_depth:
+            dependencies = get_dependencies(package)
+            visit_dependencies(
+                package,
+                depth,
+                dependencies,
                 graph,
                 best_depth,
                 active,
@@ -131,6 +151,7 @@ def visit_dependency(
             )
     finally:
         active.remove(package)
+
 
 
 def build_graph(root, get_dependencies, max_depth):

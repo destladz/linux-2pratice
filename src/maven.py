@@ -1,5 +1,4 @@
-
-import xml.etree.ElementTree as ElementTree
+import xml.etree.ElementTree as element_tree
 from urllib.request import urlopen
 from urllib.error import URLError
 
@@ -61,8 +60,8 @@ def get_xml_tag(element):
 def parse_xml(xml_data):
     """Преобразует XML-данные в дерево элементов."""
     try:
-        return ElementTree.fromstring(xml_data)
-    except ElementTree.ParseError as error:
+        return element_tree.fromstring(xml_data)
+    except element_tree.ParseError as error:
         raise ValueError(
             f"Ошибка разбора XML: {error}"
         ) from error
