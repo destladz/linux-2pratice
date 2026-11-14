@@ -1,126 +1,92 @@
+import json
+from pathlib import Path
+
+
+def load_test_repository(filename):
+    path = Path(filename)
+
+    if not path.exists():
+        raise ValueError("Тестовый репозиторий не найден")
+
+    with open(path, "r", encoding="utf-8") as file:
+        graph = json.load(file)
+
+    if not isinstance(graph, dict):
+        raise ValueError("Тестовый граф должен быть JSON-объектом")
+
+    for package, dependencies in graph.items():
+        if not package.isalpha() or not package.isupper():
+            raise ValueError(f"Некорректное имя пакета: {package}")
+
+        if not isinstance(dependencies, list):
+            raise ValueError(f"Зависимости {package} должны быть списком")
+
+        for dependency in dependencies:
+            if (
+                not isinstance(dependency, str)
+                or not dependency.isalpha()
+                or not dependency.isupper()
+            ):
+                raise ValueError(f"Некорректная зависимость: {dependency}")
+
+    for dependencies in graph.values():
+        for dependency in dependencies:
+            graph.setdefault(dependency, [])
+
+    return graph
+
+
 def build_graph(root, get_dependencies, max_depth):
     graph = {}
     visited = set()
     active = set()
 
-    def visit(node, depth):
-        if node in visited or depth > max_depth:
+    def dfs(package, depth):
+        if package in visited or package in active:
             return
 
-        if node in active:
-            return
-
-        active.add(node)
+        active.add(package)
+        graph.setdefault(package, [])
 
         if depth < max_depth:
-            dependencies = get_dependencies(node)
+            dependencies = get_dependencies(package)
         else:
             dependencies = []
 
-        graph.setdefault(node, [])
-
         for dependency in dependencies:
-            graph[node].append(dependency)
+            if dependency not in graph[package]:
+                graph[package].append(dependency)
+
             graph.setdefault(dependency, [])
 
-            if dependency not in active:
-                visit(dependency, depth + 1)
+            dfs(dependency, depth + 1)
 
-        active.remove(node)
-        visited.add(node)
+        active.remove(package)
+        visited.add(package)
 
-    visit(root, 0)
+    dfs(root, 0)
 
     return graph
 
-def load_test_graph(path):
-    import json
-    from pathlib import Path
-
-    file_path = Path(path)
-
-    if not file_path.is_file():
-        raise ValueError(
-            f"Тестовый файл не найден: {path}"
-        )
-
-    data = json.loads(
-        file_path.read_text(encoding="utf-8")
-    )
-
-    if not isinstance(data, dict):
-        raise ValueError("Неверный формат тестового графа")
-
-    return {
-        str(key): list(value)
-        for key, value in data.items()
-    }
 
 def dependency_order(graph, root):
     result = []
     visited = set()
     active = set()
 
-    def visit(node):
-        if node in visited or node in active:
+    def dfs(package):
+        if package in visited or package in active:
             return
 
-        active.add(node)
+        active.add(package)
 
-        for child in graph.get(node, []):
-            visit(child)
+        for dependency in graph.get(package, []):
+            dfs(dependency)
 
-        active.remove(node)
-        visited.add(node)
-        result.append(node)
+        active.remove(package)
+        visited.add(package)
+        result.append(package)
 
-    visit(root)
+    dfs(root)
 
     return result
-
-def ascii_tree(graph, root):
-    lines = [root]
-
-    def walk(node, prefix, path):
-        children = graph.get(node, [])
-
-        for index, child in enumerate(children):
-            last = index == len(children) - 1
-
-            branch = "└── " if last else "├── "
-
-            lines.append(prefix + branch + child)
-
-            if child not in path:
-                extension = "    " if last else "│   "
-
-                walk(
-                    child,
-                    prefix + extension,
-                    path | {child}
-                )
-
-            else:
-                lines.append(
-                    prefix + "    ↳ cycle"
-                )
-
-    walk(root, "", {root})
-
-    return "\n".join(lines)
-
-def plantuml_text(graph):
-    lines = [
-        "@startuml",
-        "left to right direction"
-    ]
-
-    for node, dependencies in graph.items():
-        for dependency in dependencies:
-            lines.append(
-                f'"{node}" --> "{dependency}"'
-            )
-
-    lines.append("@enduml")
-
-    return "\n".join(lines) + "\n"

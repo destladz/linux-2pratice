@@ -1,122 +1,81 @@
-import argparse
-import json
-from pathlib import Path
-import sys
-
 from config import load_config
-
 from graph import (
+    load_test_repository,
     build_graph,
-    load_test_graph,
-    dependency_order,
-    ascii_tree,
-    plantuml_text
+    dependency_order
 )
+from maven import get_direct_dependencies
+from visualizer import print_ascii_tree, save_plantuml
 
-from maven import (
-    fetch_pom,
-    direct_dependencies
-)
-
-def arguments():
-    parser = argparse.ArgumentParser(
-        description="Maven Dependency Graph"
-    )
-
-    parser.add_argument(
-        "--config",
-        default="config.yaml"
-    )
-
-    return parser.parse_args()
-
-def print_config(config):
-    print("\nПараметры программы:")
-
-    for key, value in config.items():
-        print(f"{key}: {value}")
 
 def main():
-    args = arguments()
-
     try:
-        config = load_config(args.config)
+        config = load_config()
 
-        print_config(config)
+        print("\nПАРАМЕТРЫ ПРОГРАММЫ")
 
-        root = config["package"]
+        for key, value in config.items():
+            print(f"{key} = {value}")
+
+        package = config["package"]
 
         if config["test_mode"]:
-
-            test_graph = load_test_graph(
+            repository_graph = load_test_repository(
                 config["test_file"]
             )
 
-            def get_deps(node):
-                return test_graph.get(node, [])
+            if package not in repository_graph:
+                raise ValueError(f"Пакет {package} отсутствует в тестовом графе")
+
+            def get_dependencies(name):
+                return repository_graph.get(name, [])
 
         else:
+            def get_dependencies(name):
+                return get_direct_dependencies(
+                    config["repository"],
+                    name
+                )
 
-            repository = config["repository"]
+        print("\nПРЯМЫЕ ЗАВИСИМОСТИ")
 
-            def get_deps(node):
-                pom = fetch_pom(repository, node)
+        direct = get_dependencies(package)
 
-                return direct_dependencies(pom)
+        for dependency in direct:
+            print(dependency)
+
+        print("\nПОСТРОЕНИЕ ГРАФА")
 
         graph = build_graph(
-            root,
-            get_deps,
+            package,
+            get_dependencies,
             config["max_depth"]
         )
 
-        print("\nГраф зависимостей:")
+        for node, dependencies in graph.items():
+            print(f"{node} -> {dependencies}")
 
-        print(
-            json.dumps(
-                graph,
-                ensure_ascii=False,
-                indent=2
-            )
-        )
+        print("\nПОРЯДОК ЗАГРУЗКИ")
 
-        print("\nПорядок загрузки:")
+        order = dependency_order(graph, package)
 
-        order = dependency_order(graph, root)
-
-        print(" -> ".join(order))
+        for index, item in enumerate(order, start=1):
+            print(f"{index}. {item}")
 
         if config["ascii_tree"]:
+            print("\nASCII-ДЕРЕВО")
+            print_ascii_tree(graph, package)
 
-            print("\nASCII-дерево:")
+        print("\nСОЗДАНИЕ PLANTUML")
 
-            print(
-                ascii_tree(graph, root)
-            )
-
-        output = Path(
+        save_plantuml(
+            graph,
             config["plantuml_file"]
         )
 
-        output.write_text(
-            plantuml_text(graph),
-            encoding="utf-8"
-        )
-
-        print(
-            f"\nPlantUML сохранён: {output}"
-        )
-
     except (ValueError, RuntimeError, OSError) as error:
+        print(f"\nОШИБКА: {error}")
 
-        print(
-            f"Ошибка: {error}",
-            file=sys.stderr
-        )
-
-        return 1
-
-    return 0
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
